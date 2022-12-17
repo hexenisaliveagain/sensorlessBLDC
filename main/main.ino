@@ -7,7 +7,7 @@
  * github repo: https://github.com/hexenisaliveagain/sensorlessBLDC
  * 2022
  */
-
+//Sekcja prekonfiguracji
 
 #define SPEED_UP          A0          // Wejście żądania zwiększenia prękości
 #define SPEED_DOWN        A1          // Wejście żądania zmniejszenia prękości
@@ -15,8 +15,9 @@
 #define PWM_MIN_DUTY      50
 #define PWM_START_DUTY    100
 
-byte bldc_step = 0, motor_speed;
+byte bldc_step = 0, motor_speed;  //definicja zmiennych określająca krok komutacji oraz prędkości silnika
 unsigned int i;
+//sekcja konfiguracji Arduino Freamework
 void setup() {
   DDRD  |= 0x38;           // Piny 3, 4, i 5 skonfigurowane jako wyjścia 
   PORTD  = 0x00;
@@ -80,7 +81,7 @@ void bldc_move(){        // Funckja z krokami komutacji
       break;
   }
 }
-
+//sekcja konfiguracji pętli Arduino Freamework
 void loop() {   //Pętla główna
   SET_PWM_DUTY(PWM_START_DUTY);    //Początkowa wartość wypełnienia PWM sygnałów sterujących
   i = 5000;
@@ -107,7 +108,7 @@ void loop() {   //Pętla główna
     }
   }
 }
-
+//sekcja funkcji
 void BEMF_A_RISING(){       //funckja 
   ADCSRB = (0 << ACME);    // AIN1 jako wejście komparatora
   ACSR |= 0x03;            // Ustawienie przerwania od komparatora na zbocze rosnące

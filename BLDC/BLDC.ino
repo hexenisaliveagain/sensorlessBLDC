@@ -14,33 +14,35 @@ byte bldc_step = 0, motor_speed = 0, motor_speed_buffer;
 bool motor_stop = true;
 unsigned int i;
 void setup() {
-  DDRD  |= 0x38;           // Configure pins 3, 4 and 5 as outputs
+  DDRD  |= 0x38;          // Piny 3, 4, i 5 skonfigurowane jako wyjścia 
   PORTD  = 0x00;
-  DDRB  |= 0x0E;           // Configure pins 9, 10 and 11 as outputs
+  DDRB  |= 0x0E;          // Piny 9, 10, 11 skonfigurowane jako wyjścia 
   PORTB  = 0x31;
-  // Timer1 module setting: set clock source to clkI/O / 1 (no prescaling)
+// Źródło zegara dla Timer1 ustalone na clkI/O / 1 (bez preskalera)
   TCCR1A = 0;
   TCCR1B = 0x01;
-  // Timer2 module setting: set clock source to clkI/O / 1 (no prescaling)
+// Źródło zegara dla Timer2 ustalone na clkI/O / 1 (bez preskalera)
   TCCR2A = 0;
   TCCR2B = 0x01;
-  // Analog comparator setting
-  ACSR   = 0x10;           // Disable and clear (flag bit) analog comparator interrupt
-  pinMode(SPEED_UP,   INPUT_PULLUP);
-  pinMode(SPEED_DOWN, INPUT_PULLUP);
+  //Komparator analogowy 
+  ACSR   = 0x10;           // Czyszczenie flagi przerwań komparatora
+  pinMode(SPEED_UP,   INPUT_PULLUP); //Aktywacja wewnętrznych podciągnięć pinu SPEED_UP
+  pinMode(SPEED_DOWN, INPUT_PULLUP); //Aktywacja wewnętrznych podciągnięć pinu SPEED_DOWN
   Serial.begin(9600);
 }
-// Analog comparator ISR
+//Pętla synchronizacji pracy komutatora i obrotów silnika
+  //Pętla opóźnia wykonywanie kolejnych kroków komutacji w oparciu o stan wyjścia komparatora
+  //Manipulacja warunkiem zakończenia pętli strojącej for() pozwala na dostrojenie odstępów czasu w jakim kolejne kroki komutacji zostaną przeprowadzone
 ISR (ANALOG_COMP_vect) {
   // BEMF debounce
-  motor_speed_buffer = motor_speed;
+  motor_speed_buffer = motor_speed; //skopiowanie nastawy wypełnienia PWM
   for(i = 0; i < 4; i++) {
     if(bldc_step & 1){
       if(!(ACSR & 0x20)) 
       i -= 1;
       if (motor_speed_buffer < (PWM_MAX_DUTY-10)){ //podniesienie wartości wypełnienia jeśli silnik jest dodatkowo obciążany
-      motor_speed_buffer = motor_speed_buffer + 2;
-      SET_PWM_DUTY(motor_speed_buffer);
+      motor_speed_buffer = motor_speed_buffer + 2; //wartość wypełnienia przebiegu PWM jest podniesiona o 2 
+      SET_PWM_DUTY(motor_speed_buffer);             //zadanie zmodyfikowanej nastawy wypełnienia
       }
     }
     else {
@@ -53,9 +55,9 @@ ISR (ANALOG_COMP_vect) {
     }
   }
   
-  bldc_move();
-  bldc_step++;
-  bldc_step %= 6;
+  bldc_move(); //Wykonanie kroku komutacji 
+  bldc_step++; //inkrementacja kroku komutacji
+  bldc_step %= 6; //Dzielenie modulo ograniczające maksymalny krok komutacji do 6
  
 }
 void bldc_move(){        // BLDC motor commutation function
@@ -88,9 +90,10 @@ void bldc_move(){        // BLDC motor commutation function
 }
 
 void loop() {
-  SET_PWM_DUTY(PWM_START_DUTY);    // Setup starting PWM with duty cycle = PWM_START_DUTY
+  SET_PWM_DUTY(PWM_START_DUTY);    //Początkowa wartość wypełnienia PWM sygnałów sterujących
   i = 5000;
   // Motor start
+  //Rozkręcenie silnika do momentu wyindukowania odpowiedniego napięcia na niezasilonej fazie silnika dla komparatora 
   while(i > 100) {
     delayMicroseconds(i);
     bldc_move();
@@ -98,8 +101,8 @@ void loop() {
     bldc_step %= 6;
     i = i - 20;
   }
-  motor_speed = PWM_START_DUTY;
-  ACSR |= 0x08;                    // Enable analog comparator interrupt
+  motor_speed = PWM_START_DUTY;     //Ustalenie nastawy prędkości dla silnika
+  ACSR |= 0x08;                    // Aktywacja przerwań komparatora. Od tego momentu funkcja przerwań komparatora przejmuje kontrolę nad silnikiem
 
   while(1) {
     while(!(digitalRead(SPEED_UP)) && motor_speed < PWM_MAX_DUTY){
@@ -117,9 +120,9 @@ void loop() {
   }
 }
 
-void BEMF_A_RISING(){
-  ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
-  ACSR |= 0x03;            // Set interrupt on rising edge
+void BEMF_A_RISING(){       //funkcja rekonfigurująca komparator
+  ADCSRB = (0 << ACME);    // AIN1 jako wejście komparatora
+  ACSR |= 0x03;            // Ustawienie przerwania od na zbocze rosnące na wejściu komparatora 
 }
 void BEMF_A_FALLING(){
   ADCSRB = (0 << ACME);    // Select AIN1 as comparator negative input
@@ -151,9 +154,9 @@ void BEMF_C_FALLING(){
 }
 
 void AH_BL(){
-  PORTD &= ~0x28;
-  PORTD |=  0x10;
-  TCCR1A =  0;            // Turn pin 11 (OC2A) PWM ON (pin 9 & pin 10 OFF)
+  PORTD &= ~0x28;         //Wyłączenie wyjść 9 i 10 
+  PORTD |=  0x10;         //Włączenie pinu 11 jako wyjście	
+  TCCR1A =  0;            //Włączenie PWM na pinie 11
   TCCR2A =  0x81;         //
 }
 void AH_CL(){
@@ -187,10 +190,10 @@ void CH_BL(){
   TCCR1A =  0x81;         //
 }
 
-void SET_PWM_DUTY(byte duty){
-  if(duty < PWM_MIN_DUTY)
+void SET_PWM_DUTY(byte duty){ //wpisanie zadanego wypełnienia do rejestrów liczników
+  if(duty < PWM_MIN_DUTY)     //Wypełnienie nie może być mniejsze od wartości minimalnej
     duty  = PWM_MIN_DUTY;
-  if(duty > PWM_MAX_DUTY)
+  if(duty > PWM_MAX_DUTY)     //Wypełnienie nie może być większe od wartości maksymalnej
     duty  = PWM_MAX_DUTY;
   OCR1A  = duty;                   // Set pin 9  PWM duty cycle
   OCR1B  = duty;                   // Set pin 10 PWM duty cycle

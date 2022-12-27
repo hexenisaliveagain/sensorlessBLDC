@@ -10,7 +10,8 @@
 #define PWM_MIN_DUTY      0
 #define PWM_START_DUTY    70
 
-byte bldc_step = 0, motor_speed, motor_speed_buffer;
+byte bldc_step = 0, motor_speed = 0, motor_speed_buffer;
+bool motor_stop = true;
 unsigned int i;
 void setup() {
   DDRD  |= 0x38;           // Configure pins 3, 4 and 5 as outputs
@@ -37,7 +38,7 @@ ISR (ANALOG_COMP_vect) {
     if(bldc_step & 1){
       if(!(ACSR & 0x20)) 
       i -= 1;
-      if (motor_speed_buffer < (PWM_MAX_DUTY-10)){
+      if (motor_speed_buffer < (PWM_MAX_DUTY-10)){ //podniesienie wartości wypełnienia jeśli silnik jest dodatkowo obciążany
       motor_speed_buffer = motor_speed_buffer + 2;
       SET_PWM_DUTY(motor_speed_buffer);
       }

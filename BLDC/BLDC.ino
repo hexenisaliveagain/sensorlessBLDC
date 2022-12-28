@@ -1,8 +1,3 @@
-/* Sensorless brushless DC (BLDC) motor control with Arduino UNO (Arduino DIY ESC).
- * This is a free software with NO WARRANTY.
- * https://simple-circuit.com/
- */
-
 
 #define SPEED_UP          A0          // BLDC motor speed-up button
 #define SPEED_DOWN        A1          // BLDC motor speed-down button

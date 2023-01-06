@@ -1,11 +1,14 @@
 #define SPEED_UP          A0          // BLDC motor speed-up button
 #define SPEED_DOWN        A1          // BLDC motor speed-down button
 #define PWM_MAX_DUTY      255
-#define PWM_MIN_DUTY      0
-#define PWM_START_DUTY    50
+#define PWM_MIN_DUTY      30
+#define PWM_START_DUTY    58
+#define PWM_INIT_SPEED    30
 
 byte bldc_step = 0, motor_speed = 0, motor_speed_buffer;
+int speed;
 bool motor_stop = true;
+bool cw = true;
 unsigned int i;
 void setup() {
   DDRD  |= 0x38;          // Piny 3, 4, i 5 skonfigurowane jako wyjścia 
@@ -23,6 +26,7 @@ void setup() {
   pinMode(SPEED_UP,   INPUT_PULLUP); //Aktywacja wewnętrznych podciągnięć pinu SPEED_UP
   pinMode(SPEED_DOWN, INPUT_PULLUP); //Aktywacja wewnętrznych podciągnięć pinu SPEED_DOWN
   Serial.begin(9600);
+  motor_speed = PWM_INIT_SPEED;
 }
 //Pętla synchronizacji pracy komutatora i obrotów silnika
   //Pętla opóźnia wykonywanie kolejnych kroków komutacji w oparciu o stan wyjścia komparatora
@@ -35,7 +39,7 @@ ISR (ANALOG_COMP_vect) {
       if(!(ACSR & 0x20)) 
       i -= 1;
       if (motor_speed_buffer < (PWM_MAX_DUTY-10)){ //podniesienie wartości wypełnienia jeśli silnik jest dodatkowo obciążany
-      motor_speed_buffer = motor_speed_buffer + 2; //wartość wypełnienia przebiegu PWM jest podniesiona o 2 
+      motor_speed_buffer = motor_speed_buffer + 5; //wartość wypełnienia przebiegu PWM jest podniesiona o 2 
       SET_PWM_DUTY(motor_speed_buffer);             //zadanie zmodyfikowanej nastawy wypełnienia
       }
     }
@@ -43,17 +47,23 @@ ISR (ANALOG_COMP_vect) {
       if((ACSR & 0x20)) 
       i -= 1;
       if (motor_speed_buffer < (PWM_MAX_DUTY-10)){
-        motor_speed_buffer = motor_speed_buffer + 2;
+        motor_speed_buffer = motor_speed_buffer + 5;
       SET_PWM_DUTY(motor_speed_buffer);
       }
     }
   }
   
-  bldc_move(); //Wykonanie kroku komutacji 
+  if (cw == true){
+     bldc_move();
+  }
+  else
+   if (cw == false){
+  bldc_move_reverse(); //Wykonanie kroku komutacji
+  }
   bldc_step++; //inkrementacja kroku komutacji
   bldc_step %= 6; //Dzielenie modulo ograniczające maksymalny krok komutacji do 6
- 
-}
+  }
+
 void bldc_move(){        // BLDC motor commutation function
   switch(bldc_step){
     case 0:
@@ -82,38 +92,100 @@ void bldc_move(){        // BLDC motor commutation function
       break;
   }
 }
-
-void loop() {
-  SET_PWM_DUTY(PWM_START_DUTY);    //Początkowa wartość wypełnienia PWM sygnałów sterujących
-  i = 5000;
-  // Motor start
-  //Rozkręcenie silnika do momentu wyindukowania odpowiedniego napięcia na niezasilonej fazie silnika dla komparatora 
-  while(i > 100) {
-    delayMicroseconds(i);
-    bldc_move();
-    bldc_step++;
-    bldc_step %= 6;
-    i = i - 20;
+void bldc_move_reverse(){        // BLDC motor commutation function
+  switch(bldc_step){
+    case 5:
+      AH_BL();
+      BEMF_C_FALLING();
+      break;
+    case 4:
+      AH_CL();
+      BEMF_B_RISING();
+      break;
+    case 3:
+      BH_CL();
+      BEMF_A_FALLING();
+      break;
+    case 2:
+      BH_AL();
+      BEMF_C_RISING();
+      break;
+    case 1:
+      CH_AL();
+      BEMF_B_FALLING();
+      break;
+    case 0:
+      CH_BL();
+      BEMF_A_RISING();
+      break;
   }
-  motor_speed = PWM_START_DUTY;     //Ustalenie nastawy prędkości dla silnika
-  ACSR |= 0x08;                    // Aktywacja przerwań komparatora. Od tego momentu funkcja przerwań komparatora przejmuje kontrolę nad silnikiem
-
-  while(1) {
-    while(!(digitalRead(SPEED_UP)) && motor_speed < PWM_MAX_DUTY){
-      motor_speed++;
+}
+void loop() {
+      //Ustalenie nastawy prędkości dla silnika
+                     // Aktywacja przerwań komparatora. Od tego momentu funkcja przerwań komparatora przejmuje kontrolę nad silnikiem
+  if (Serial.available())
+  {
+    char c = Serial.read();
+    switch (c)
+    {
+      case 'r': if (motor_stop == true){
+      SET_PWM_DUTY(PWM_START_DUTY);    //Początkowa wartość wypełnienia PWM sygnałów sterujących 
+      motor_launch();
+      ACSR |= 0x08;
+      SET_PWM_DUTY(motor_speed); 
+      Serial.println("Motor Starts");
+      motor_stop = false;
+      }
+      else
+        Serial.println("Motor Already Runs!!"); break;
+      case 's':
+      stop();
+      ACSR = 0x00;
+      motor_stop = true;
+      break;
+      case 'd': 
+      Serial.println(motor_speed);
+      break;
+      case 'x':
+      speed = Serial.parseInt();
+      if (speed > PWM_MIN_DUTY && speed < PWM_MAX_DUTY)
+      motor_speed = speed;
       SET_PWM_DUTY(motor_speed);
-      delay(100);
-      Serial.print("Speed UP \n");
-    }
-    while(!(digitalRead(SPEED_DOWN)) && motor_speed > PWM_MIN_DUTY){
-      motor_speed--;
-      SET_PWM_DUTY(motor_speed);
-      delay(100);
-      Serial.print("Speed Down \n");
+      Serial.println(speed);
+      break;
+      case 'k':
+      cw = true;
+      break;
+      case 'l':
+      cw = false;
+      break;
     }
   }
 }
+void motor_launch(){
 
+  byte motor_speed_buffer2 = motor_speed;
+   i = 5000;
+  // Motor start
+  bldc_step = 0;
+  //Rozkręcenie silnika do momentu wyindukowania odpowiedniego napięcia na niezasilonej fazie silnika dla komparatora 
+  while(i > 100) {
+    delayMicroseconds(i);
+    if (cw == true)
+    bldc_move();
+    else if (cw == false)
+    bldc_move_reverse();
+
+    bldc_step++;
+    bldc_step %= 6;
+    i = i - 40;
+    if (i < 3000 && motor_speed_buffer2 < (50)){
+        motor_speed_buffer2 = motor_speed_buffer2 + 5;
+      SET_PWM_DUTY(motor_speed_buffer2);}
+      
+  }
+
+}
 void BEMF_A_RISING(){       //funkcja rekonfigurująca komparator
   ADCSRB = (0 << ACME);    // AIN1 jako wejście komparatora
   ACSR |= 0x03;            // Ustawienie przerwania od na zbocze rosnące na wejściu komparatora 
@@ -182,6 +254,13 @@ void CH_BL(){
   PORTD |=  0x10;
   TCCR2A =  0;            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
   TCCR1A =  0x81;         //
+}
+void stop(){
+  SET_PWM_DUTY(0);
+  PORTD  =  0x00;
+  PORTD  =  0x00;
+  TCCR2A =  0;            // Turn pin 9 (OC1A) PWM ON (pin 10 & pin 11 OFF)
+  TCCR1A =  0;         //
 }
 
 void SET_PWM_DUTY(byte duty){ //wpisanie zadanego wypełnienia do rejestrów liczników

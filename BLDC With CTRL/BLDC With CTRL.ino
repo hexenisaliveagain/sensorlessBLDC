@@ -5,8 +5,9 @@
 #define PWM_START_DUTY    58
 #define PWM_INIT_SPEED    30
 
-byte bldc_step = 0, motor_speed = 0, motor_speed_buffer;
+int bldc_step = 0, motor_speed = 0, motor_speed_buffer;
 int speed;
+float speed_f;
 bool motor_stop = true;
 bool cw = true;
 unsigned int i;
@@ -148,8 +149,11 @@ void loop() {
       break;
       case 'x':
       speed = Serial.parseInt();
-      if (speed > PWM_MIN_DUTY && speed < PWM_MAX_DUTY)
-      motor_speed = speed;
+      if (speed > 10 && speed < 101)
+      speed_f = speed * 2.54;
+      Serial.println(speed_f);
+      if (speed_f > PWM_MIN_DUTY && speed_f < PWM_MAX_DUTY)
+      motor_speed = speed_f;
       SET_PWM_DUTY(motor_speed);
       Serial.println(speed);
       break;
@@ -164,7 +168,7 @@ void loop() {
 }
 void motor_launch(){
 
-  byte motor_speed_buffer2 = motor_speed;
+  byte motor_speed_buffer2 = PWM_START_DUTY;
    i = 5000;
   // Motor start
   bldc_step = 0;
@@ -179,12 +183,11 @@ void motor_launch(){
     bldc_step++;
     bldc_step %= 6;
     i = i - 40;
-    if (i < 3000 && motor_speed_buffer2 < (50)){
-        motor_speed_buffer2 = motor_speed_buffer2 + 5;
+    if (i < 3000 && motor_speed_buffer2 < (90)){
+        motor_speed_buffer2 = motor_speed_buffer2 + 2;
       SET_PWM_DUTY(motor_speed_buffer2);}
-      
   }
-
+    
 }
 void BEMF_A_RISING(){       //funkcja rekonfigurująca komparator
   ADCSRB = (0 << ACME);    // AIN1 jako wejście komparatora
